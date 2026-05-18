@@ -4,13 +4,11 @@ from PIL import Image
 import io
 import base64
 import os
-import threading
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 model = None
-model_loading = False
 
 CLASS_NAMES = ['Avión','Auto','Pájaro','Gato','Ciervo',
                'Perro','Rana','Caballo','Barco','Camión']
@@ -18,43 +16,31 @@ CLASS_NAMES = ['Avión','Auto','Pájaro','Gato','Ciervo',
 MEAN = np.array([125.307, 122.950, 113.865])
 STD  = np.array([62.993,  62.089,  66.705])
 
-def cargar_modelo():
-    global model, model_loading
-    model_loading = True
-    import tensorflow as tf
-    model = tf.keras.models.load_model(os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
-    model_loading = False
-    print("Modelo cargado correctamente")
-
-# Cargar modelo en hilo separado al arrancar
-hilo = threading.Thread(target=cargar_modelo)
-hilo.start()
+def get_model():
+    global model
+    if model is None:
+        import tensorflow as tf
+        model = tf.keras.models.load_model(
+            os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
+    return model
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/status')
-def status():
-    if model is None:
-        return jsonify({'listo': False, 'mensaje': 'Cargando modelo...'})
-    return jsonify({'listo': True, 'mensaje': 'Modelo listo'})
-
 @app.route('/predecir', methods=['POST'])
 def predecir():
-    if model is None:
-        return jsonify({'error': 'El modelo aún se está cargando, espera unos segundos e intenta de nuevo.'}), 503
-
     if 'imagen' not in request.files:
         return jsonify({'error': 'No se envió imagen'}), 400
 
+    m = get_model()
     file = request.files['imagen']
     img = Image.open(file.stream).convert('RGB')
     img_32 = img.resize((32, 32))
     img_array = np.array(img_32, dtype=np.float32)
     img_norm = (img_array - MEAN) / (STD + 1e-7)
 
-    probs = model.predict(np.expand_dims(img_norm, axis=0), verbose=0)[0]
+    probs = m.predict(np.expand_dims(img_norm, axis=0), verbose=0)[0]
     clase = int(np.argmax(probs))
 
     buffered = io.BytesIO()
