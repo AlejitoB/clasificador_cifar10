@@ -77,36 +77,64 @@
     document.getElementById('loading').style.display = 'block';
     document.getElementById('resultado').style.display = 'none';
 
+    // Verificar si el modelo está listo
+    try {
+      const statusRes = await fetch('/status');
+      const status = await statusRes.json();
+      if (!status.listo) {
+        alert('El modelo aún se está cargando. Espera 30 segundos e intenta de nuevo.');
+        btn.disabled = false;
+        document.getElementById('loading').style.display = 'none';
+        return;
+      }
+    } catch(e) {}
+
     const formData = new FormData();
     formData.append('imagen', file);
 
     try {
-      const res  = await fetch('/predecir', { method: 'POST', body: formData });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      const res = await fetch('/predecir', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
       const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
 
       document.getElementById('claseTexto').textContent = data.clase;
       document.getElementById('confianzaTexto').textContent = `Confianza: ${data.confianza}%`;
 
       const barras = document.getElementById('barras');
       barras.innerHTML = '';
-      const probs = data.probabilidades;
-      const top   = data.clase;
-
-      Object.entries(probs)
+      Object.entries(data.probabilidades)
         .sort((a, b) => b[1] - a[1])
         .forEach(([nombre, pct]) => {
           barras.innerHTML += `
             <div class="barra-wrap">
               <div class="barra-label"><span>${nombre}</span><span>${pct}%</span></div>
               <div class="barra-bg">
-                <div class="barra-fill ${nombre === top ? 'top' : ''}" style="width:${pct}%"></div>
+                <div class="barra-fill ${nombre === data.clase ? 'top' : ''}" style="width:${pct}%"></div>
               </div>
             </div>`;
         });
 
       document.getElementById('resultado').style.display = 'block';
+
     } catch(e) {
-      alert('Error al clasificar la imagen.');
+      if (e.name === 'AbortError') {
+        alert('Tiempo agotado. El modelo tardó demasiado. Intenta de nuevo.');
+      } else {
+        alert('Error al clasificar. Intenta de nuevo.');
+      }
     } finally {
       btn.disabled = false;
       document.getElementById('loading').style.display = 'none';
