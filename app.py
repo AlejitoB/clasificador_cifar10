@@ -9,13 +9,19 @@ import os
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model = tf.keras.models.load_model(os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
+model = None
 
 CLASS_NAMES = ['Avión','Auto','Pájaro','Gato','Ciervo',
                'Perro','Rana','Caballo','Barco','Camión']
 
 MEAN = np.array([125.307, 122.950, 113.865])
 STD  = np.array([62.993,  62.089,  66.705])
+
+def get_model():
+    global model
+    if model is None:
+        model = tf.keras.models.load_model(os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
+    return model
 
 @app.route('/')
 def index():
@@ -26,13 +32,14 @@ def predecir():
     if 'imagen' not in request.files:
         return jsonify({'error': 'No se envió imagen'}), 400
 
+    m = get_model()
     file = request.files['imagen']
     img = Image.open(file.stream).convert('RGB')
     img_32 = img.resize((32, 32))
     img_array = np.array(img_32, dtype=np.float32)
     img_norm = (img_array - MEAN) / (STD + 1e-7)
 
-    probs = model.predict(np.expand_dims(img_norm, axis=0), verbose=0)[0]
+    probs = m.predict(np.expand_dims(img_norm, axis=0), verbose=0)[0]
     clase = int(np.argmax(probs))
 
     buffered = io.BytesIO()
