@@ -4,16 +4,16 @@ import numpy as np
 from PIL import Image
 import io
 import base64
+import os
 
 app = Flask(__name__)
 
-# Cargar modelo una sola vez al iniciar
-model = tf.keras.models.load_model('mejor_modelo_fase2.keras')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model = tf.keras.models.load_model(os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
 
 CLASS_NAMES = ['Avión','Auto','Pájaro','Gato','Ciervo',
                'Perro','Rana','Caballo','Barco','Camión']
 
-# Media y std de CIFAR-10 (fijos, no necesita recalcular)
 MEAN = np.array([125.307, 122.950, 113.865])
 STD  = np.array([62.993,  62.089,  66.705])
 
@@ -35,7 +35,6 @@ def predecir():
     probs = model.predict(np.expand_dims(img_norm, axis=0), verbose=0)[0]
     clase = int(np.argmax(probs))
 
-    # Convertir imagen a base64 para mostrarla
     buffered = io.BytesIO()
     img.save(buffered, format="JPEG")
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
@@ -48,6 +47,5 @@ def predecir():
     })
 
 if __name__ == '__main__':
-    import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model = tf.keras.models.load_model(os.path.join(BASE_DIR, 'mejor_modelo_fase2.keras'))
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
