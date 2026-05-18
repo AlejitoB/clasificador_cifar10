@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clasificador CIFAR-10</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: white; border-radius: 16px; padding: 2rem; width: 100%; max-width: 480px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    h1 { font-size: 1.4rem; font-weight: 600; color: #1a1a2e; margin-bottom: 0.3rem; }
+    p.sub { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+    .upload-area { border: 2px dashed #d0d0d0; border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; margin-bottom: 1rem; }
+    .upload-area:hover { border-color: #378ADD; }
+    .upload-area i { font-size: 2rem; color: #bbb; display: block; margin-bottom: 0.5rem; }
+    .upload-area p { font-size: 14px; color: #aaa; }
+    #fileInput { display: none; }
+    #preview { width: 100%; border-radius: 10px; margin-bottom: 1rem; display: none; max-height: 220px; object-fit: contain; }
+    button { width: 100%; padding: 0.8rem; background: #1a1a2e; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; transition: background 0.2s; margin-bottom: 1.5rem; }
+    button:hover { background: #378ADD; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #resultado { display: none; }
+    .clase-badge { background: #e8f4fd; color: #185FA5; font-size: 1.5rem; font-weight: 700; text-align: center; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
+    .confianza { font-size: 13px; color: #888; text-align: center; margin-bottom: 1.2rem; }
+    .barra-wrap { margin-bottom: 6px; }
+    .barra-label { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 2px; }
+    .barra-bg { background: #f0f0f0; border-radius: 99px; height: 8px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 99px; background: #378ADD; transition: width 0.5s ease; }
+    .barra-fill.top { background: #1a1a2e; }
+    .loading { text-align: center; color: #888; font-size: 14px; padding: 1rem; display: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>🧠 Clasificador CIFAR-10</h1>
+  <p class="sub">CNN entrenada con fine-tuning — 91.69% accuracy</p>
+
+  <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+    <span style="font-size:2rem; display:block; margin-bottom:0.5rem;">📁</span>
+    <p>Haz clic para subir una imagen</p>
+    <p style="font-size:11px; color:#bbb; margin-top:4px;">JPG, PNG, WEBP</p>
+  </div>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <img id="preview" src="" alt="preview">
+
+  <button id="btnPredecir" onclick="predecir()" disabled>Clasificar imagen</button>
+
+  <div class="loading" id="loading">Analizando imagen...</div>
+
+  <div id="resultado">
+    <div class="clase-badge" id="claseTexto"></div>
+    <div class="confianza" id="confianzaTexto"></div>
+    <div id="barras"></div>
+  </div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const preview   = document.getElementById('preview');
+  const btn       = document.getElementById('btnPredecir');
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    btn.disabled = false;
+    document.getElementById('resultado').style.display = 'none';
+  });
+
+  async function predecir() {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    btn.disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('resultado').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('imagen', file);
+
+    try {
+      const res  = await fetch('/predecir', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      document.getElementById('claseTexto').textContent = data.clase;
+      document.getElementById('confianzaTexto').textContent = `Confianza: ${data.confianza}%`;
+
+      const barras = document.getElementById('barras');
+      barras.innerHTML = '';
+      const probs = data.probabilidades;
+      const top   = data.clase;
+
+      Object.entries(probs)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([nombre, pct]) => {
+          barras.innerHTML += `
+            <div class="barra-wrap">
+              <div class="barra-label"><span>${nombre}</span><span>${pct}%</span></div>
+              <div class="barra-bg">
+                <div class="barra-fill ${nombre === top ? 'top' : ''}" style="width:${pct}%"></div>
+              </div>
+            </div>`;
+        });
+
+      document.getElementById('resultado').style.display = 'block';
+    } catch(e) {
+      alert('Error al clasificar la imagen.');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('loading').style.display = 'none';
+    }
+  }
+</script>
+</body>
+</html>
